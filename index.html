@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CarPool India — Live Route & Fair Split</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f172a'/%3E%3Cpath d='M14 38l5-14c1-3 4-5 7-5h12c3 0 6 2 7 5l5 14v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-3H20v3a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V38zm7-4h22l-3-9a2 2 0 0 0-2-1H26a2 2 0 0 0-2 1l-3 9zm1 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm20 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6z' fill='%2338bdf8'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>CarPool</h1>
+        <p class="subtitle">Live GPS • AC Meter • Fair Split</p>
+      </div>
+      <div class="topbar-actions">
+        <button id="btn-gps" class="btn btn-primary" title="Track live GPS route">📍 Live GPS</button>
+        <button id="btn-reset" class="btn btn-ghost" title="Clear all stops and riders">Reset</button>
+      </div>
+    </header>
+
+    <main class="main-grid">
+      <!-- Trip Setup & Map (Map collapsed by default) -->
+      <section class="card map-card">
+        <div class="card-header">
+          <div>
+            <h2>Trip Points</h2>
+            <p class="hint" id="map-hint">Enter Starting Point, Sharing Point(s), and Destination to calculate.</p>
+          </div>
+          <div class="map-controls">
+            <button id="btn-toggle-map" class="btn btn-secondary">🗺️ Open Map</button>
+            <button id="btn-ai-optimize" class="btn btn-secondary" title="AI reorders middle stops to minimize distance">✨ AI Optimize</button>
+          </div>
+        </div>
+
+        <!-- 3-Step Point Inputs: Start, Sharing Point, Destination -->
+        <div class="trip-inputs">
+          <div class="search-wrap">
+            <label class="field-label">1. Starting Point</label>
+            <div class="form-inline">
+              <input type="text" id="start-point-input" placeholder="Search starting place..." autocomplete="off" />
+              <button id="btn-use-gps-start" class="btn btn-secondary" title="Use current GPS as Starting Point">📍 GPS</button>
+            </div>
+            <ul id="start-results" class="search-results hidden"></ul>
+          </div>
+
+          <div class="search-wrap">
+            <div class="stops-header">
+              <label class="field-label">2. Sharing Point(s) (Middle Pickups)</label>
+            </div>
+            <div class="form-inline">
+              <input type="text" id="point-name-input" placeholder="Search sharing / pickup place..." autocomplete="off" />
+            </div>
+            <ul id="search-results" class="search-results hidden"></ul>
+          </div>
+
+          <div class="search-wrap">
+            <label class="field-label">3. Destination Point</label>
+            <div class="form-inline">
+              <input type="text" id="dest-point-input" placeholder="Search destination place..." autocomplete="off" />
+            </div>
+            <ul id="dest-results" class="search-results hidden"></ul>
+          </div>
+        </div>
+
+        <div id="map-collapse" class="canvas-wrap hidden">
+          <div id="gmap-container" class="gmap-container"></div>
+        </div>
+
+        <div id="gps-status" class="gps-status hidden"></div>
+
+        <!-- Compact Stop List with Reorder & Delete -->
+        <div class="stops-section">
+          <div class="stops-header">
+            <span class="field-label">Active Route (<span id="stop-count">0</span> stops)</span>
+          </div>
+          <ul id="stop-list" class="stop-list"></ul>
+        </div>
+      </section>
+
+      <!-- Vehicle, AC, Traffic & Travelers -->
+      <section class="side-panel">
+        <div class="card">
+          <div class="card-header">
+            <h2>Vehicle &amp; Fuel</h2>
+            <span class="ac-status-pill" id="ac-status-pill">AC: ECO</span>
+          </div>
+
+          <div class="car-picker">
+            <input type="text" id="car-search" placeholder="Search Indian car (2006 Alto 800 – 2026 EV)..." />
+            <select id="vehicle-type"></select>
+          </div>
+
+          <div class="settings-grid">
+            <label class="field">
+              <span>City Fuel (Present)</span>
+              <select id="fuel-city">
+                <option value="hyderabad">Hyderabad (₹116.15)</option>
+                <option value="delhi">New Delhi (₹102.12)</option>
+                <option value="mumbai">Mumbai (₹111.21)</option>
+                <option value="bengaluru">Bengaluru (₹110.44)</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Fuel Type</span>
+              <input type="text" id="fuel-type" value="Petrol" readonly />
+            </label>
+            <label class="field">
+              <span id="mileage-label">Mileage (km/L)</span>
+              <input type="number" id="vehicle-mileage" value="24.8" min="1" step="0.1" />
+            </label>
+            <label class="field">
+              <span id="fuel-price-label">Price (₹/L)</span>
+              <div class="input-prefix">
+                <span>₹</span>
+                <input type="number" id="fuel-price" value="116.15" min="1" step="0.01" />
+              </div>
+            </label>
+          </div>
+
+          <div class="settings-grid">
+            <label class="field">
+              <span>Base Rate (₹/km)</span>
+              <div class="input-prefix">
+                <span>₹</span>
+                <input type="number" id="base-rate" value="4.68" readonly />
+              </div>
+            </label>
+            <label class="field">
+              <span>FASTag Toll / Parking</span>
+              <div class="input-prefix">
+                <span>₹</span>
+                <input type="number" id="toll-cost" value="0" min="0" step="10" />
+              </div>
+            </label>
+          </div>
+
+          <!-- AC Meter -->
+          <div class="ac-meter-box">
+            <div class="ac-gauge">
+              <div class="ac-gauge-fill" id="ac-gauge-fill" style="width: 50%;"></div>
+            </div>
+            <div class="ac-modes" role="group" aria-label="AC Mode">
+              <button class="ac-btn" data-ac="off">Off</button>
+              <button class="ac-btn active" data-ac="eco">Eco (+12%)</button>
+              <button class="ac-btn" data-ac="max">Max (+25%)</button>
+            </div>
+          </div>
+
+          <!-- Traffic & Rest Time -->
+          <div class="traffic-box">
+            <div class="traffic-header">
+              <span class="field-label">Traffic &amp; Rested Time</span>
+              <div class="traffic-presets">
+                <button class="chip-btn" data-mins="5">Light (5m)</button>
+                <button class="chip-btn active" data-mins="15">Mod (15m)</button>
+                <button class="chip-btn" data-mins="30">Heavy (30m)</button>
+              </div>
+            </div>
+            <div class="settings-grid">
+              <label class="field">
+                <span>Traffic Wait (mins)</span>
+                <input type="number" id="idle-mins" value="15" min="0" step="1" />
+              </label>
+              <label class="field">
+                <span>Rested Time (mins)</span>
+                <input type="number" id="rest-mins" value="0" min="0" step="5" />
+              </label>
+            </div>
+            <div class="settings-grid">
+              <label class="toggle-check">
+                <input type="checkbox" id="ac-during-rest" />
+                <span>AC On while rested</span>
+              </label>
+              <label class="field">
+                <span>Split Mode</span>
+                <select id="pool-mode">
+                  <option value="segment">Fair Segment Split</option>
+                  <option value="detour">AI Detour Fair-Share</option>
+                  <option value="equal">Flat Equal Split</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Travelers -->
+        <div class="card">
+          <div class="card-header">
+            <h2>Travelers (<span id="rider-count">0</span>)</h2>
+            <label class="toggle-check">
+              <input type="checkbox" id="driver-splits" checked />
+              <span>Driver splits fuel</span>
+            </label>
+          </div>
+
+          <div class="rider-form">
+            <input type="text" id="rider-name" placeholder="Name (e.g., Rahul)" maxlength="20" />
+            <div class="rider-selects">
+              <select id="rider-start" title="Pickup Stop"></select>
+              <span class="arrow">→</span>
+              <select id="rider-end" title="Drop-off Stop"></select>
+            </div>
+            <button id="btn-add-rider" class="btn btn-primary">+ Add Person</button>
+          </div>
+
+          <ul id="rider-list" class="rider-list"></ul>
+        </div>
+      </section>
+    </main>
+
+    <!-- Summary & Breakdown (with collapsible calculation icons) -->
+    <section class="card summary-card">
+      <div class="summary-stats">
+        <div class="stat">
+          <span class="stat-label">Distance</span>
+          <strong class="stat-value" id="stat-distance">0.0 km</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Fuel</span>
+          <strong class="stat-value" id="stat-base-cost">₹0.00</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-label">AC + Idle</span>
+          <strong class="stat-value accent-warn" id="stat-ac-cost">₹0.00</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Toll / Park</span>
+          <strong class="stat-value" id="stat-toll-cost">₹0.00</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Total</span>
+          <strong class="stat-value accent-green" id="stat-total-cost">₹0.00</strong>
+        </div>
+      </div>
+
+      <div class="breakdown-grid">
+        <div>
+          <div class="section-head-row">
+            <h3>💬 Per-Person Cost Chat</h3>
+            <button id="btn-copy-chat" class="btn btn-secondary">Copy Bill</button>
+          </div>
+          <div id="person-breakdown" class="breakdown-list"></div>
+        </div>
+        <div>
+          <div class="section-head-row">
+            <h3>🛣️ Route Legs</h3>
+          </div>
+          <div id="segment-breakdown" class="breakdown-list"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="cars-india.js"></script>
+  <script src="ai-optimizer.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
