@@ -108,9 +108,22 @@ body::before {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-soft);
+}
+
+.map-card {
+  position: relative;
+  z-index: 10;
+}
+
+.map-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .card-header h2 {
@@ -250,6 +263,7 @@ input:focus, select:focus {
   letter-spacing: 0.02em;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
   backdrop-filter: blur(10px);
   transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
@@ -348,9 +362,10 @@ input:focus, select:focus {
 .toggle-check { display: flex; align-items: center; gap: 7px; font-size: 0.8rem; color: var(--text); cursor: pointer; }
 .toggle-check input { width: auto; accent-color: var(--cyan); }
 
-.rider-form { display: flex; flex-direction: column; gap: 8px; }
+.rider-form { display: flex; flex-direction: column; gap: 10px; }
 .rider-selects { display: flex; align-items: center; gap: 8px; }
-.arrow { color: var(--amber); font-weight: 700; }
+.rider-selects select { flex: 1; min-width: 0; }
+.arrow { color: var(--amber); font-weight: 700; flex-shrink: 0; }
 
 .rider-list { list-style: none; display: flex; flex-direction: column; gap: 7px; max-height: 170px; overflow-y: auto; }
 .rider-item {
